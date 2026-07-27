@@ -1,0 +1,65 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# IDEs
+.vscode/
+.idea/
+
+# Operating System files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Environment variables
+.env
+.env.*
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Logs
+*.log
+
+# Test & coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Cache
+.cache/
+
+# Temporary files
+*.tmp
+*.bak
+
+# Uploaded customer datasets
+uploads/
+
+# Exported reports
+exports/
+reports/
+
+# Machine learning models
+models/
+*.pkl
+*.joblib
+
+# Local databases
+*.sqlite3
+*.db
