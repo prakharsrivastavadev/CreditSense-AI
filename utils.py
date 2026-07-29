@@ -1,44 +1,134 @@
+from __future__ import annotations
+
 import pandas as pd
+from pandas.api.types import is_numeric_dtype
+
+REQUIRED_COLUMNS = {
+    "CustomerID",
+    "Name",
+    "Date",
+    "CreditScore",
+    "Income",
+    "Debt",
+}
 
 
-def load_data(uploaded_file):
-    """Load customer credit data from a CSV file."""
-    return pd.read_csv(uploaded_file, parse_dates=["Date"])
+def load_data(uploaded_file) -> pd.DataFrame:
+    """
+    Load and validate customer credit data.
+    """
+
+    try:
+        df = pd.read_csv(uploaded_file)
+    except Exception as e:
+        raise ValueError(f"Unable to read CSV file: {e}")
+
+    if df.empty:
+        raise ValueError("The uploaded CSV is empty.")
+
+    missing = REQUIRED_COLUMNS - set(df.columns)
+
+    if missing:
+        raise ValueError(
+            f"Missing required columns: {', '.join(sorted(missing))}"
+        )
+
+    # Parse dates safely
+    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+
+    # Convert numeric columns safely
+    for col in ["CreditScore", "Income", "Debt"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+
+    # Remove rows missing essential values
+    df = df.dropna(
+        subset=[
+            "CustomerID",
+            "Name",
+            "CreditScore",
+            "Income",
+            "Debt",
+        ]
+    ).copy()
+
+    # Prevent impossible negative values
+    df["Income"] = df["Income"].clip(lower=0)
+    df["Debt"] = df["Debt"].clip(lower=0)
+
+    # Keep credit scores in a realistic range
+    df["CreditScore"] = df["CreditScore"].clip(300, 850)
+
+    return df.reset_index(drop=True)
 
 
-def calculate_summary(df):
-    """Calculate overall credit metrics."""
+def calculate_summary(df: pd.DataFrame) -> dict:
+    """
+    Calculate dashboard summary metrics.
+    """
 
-    total_customers = len(df)
-    average_credit_score = df["CreditScore"].mean()
-    average_income = df["Income"].mean()
-    average_debt = df["Debt"].mean()
+    if df.empty:
+        return {
+            "Total Customers": 0,
+            "Average Credit Score": 0,
+            "Average Income": 0,
+            "Average Debt": 0,
+        }
 
     return {
-        "Total Customers": total_customers,
-        "Average Credit Score": average_credit_score,
-        "Average Income": average_income,
-        "Average Debt": average_debt,
+        "Total Customers": int(len(df)),
+        "Average Credit Score": round(df["CreditScore"].mean(), 2),
+        "Average Income": round(df["Income"].mean(), 2),
+        "Average Debt": round(df["Debt"].mean(), 2),
     }
 
 
-def credit_rating(score):
-    """Return credit rating based on credit score."""
+def credit_rating(score) -> str:
+    """
+    Convert credit score into rating.
+    """
+
+    try:
+        score = float(score)
+    except Exception:
+        return "Unknown"
 
     if score >= 750:
         return "Excellent"
-    elif score >= 700:
+
+    if score >= 700:
         return "Good"
-    elif score >= 650:
+
+    if score >= 650:
         return "Fair"
-    elif score >= 600:
+
+    if score >= 600:
         return "Poor"
-    else:
-        return "Very Poor"
+
+    return "Very Poor"
 
 
-def loan_eligibility(score, debt_to_income):
-    """Simple rule-based loan eligibility."""
+def debt_to_income_ratio(df: pd.DataFrame) -> pd.Series:
+    """
+    Calculate Debt-to-Income ratio safely.
+    """
+
+    income = df["Income"].replace(0, pd.NA)
+
+    ratio = (df["Debt"] / income) * 100
+
+    return ratio.fillna(0).round(2)
+
+
+def loan_eligibility(score, debt_to_income) -> str:
+    """
+    Rule-based loan eligibility.
+    """
+
+    try:
+        score = float(score)
+        debt_to_income = float(debt_to_income)
+    except Exception:
+        return "Not Eligible"
 
     if score >= 700 and debt_to_income <= 40:
         return "Eligible"
@@ -46,23 +136,30 @@ def loan_eligibility(score, debt_to_income):
     return "Not Eligible"
 
 
-def debt_to_income_ratio(df):
-    """Calculate debt-to-income ratio."""
+def search_customers(df: pd.DataFrame, keyword: str) -> pd.DataFrame:
+    """
+    Search by customer ID or name.
+    """
 
-    ratio = (df["Debt"] / df["Income"]) * 100
-
-    return ratio.round(2)
-
-
-def search_customers(df, keyword):
-    """Search customers by name or ID."""
-
-    if not keyword:
+    if df.empty:
         return df
 
-    keyword = keyword.lower()
+    if keyword is None:
+        return df
 
-    return df[
-        df["CustomerID"].astype(str).str.lower().str.contains(keyword)
-        | df["Name"].astype(str).str.lower().str.contains(keyword)
-    ]
+    keyword = str(keyword).strip()
+
+    if keyword == "":
+        return df
+
+    mask = (
+        df["CustomerID"]
+        .astype(str)
+        .str.contains(keyword, case=False, na=False)
+        |
+        df["Name"]
+        .astype(str)
+        .str.contains(keyword, case=False, na=False)
+    )
+
+    return df.loc[mask].copy()
